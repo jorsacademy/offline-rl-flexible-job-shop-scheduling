@@ -1,12 +1,11 @@
 from dataclasses import dataclass
-from typing import Dict, List, Tuple
 
 
 @dataclass(frozen=True)
 class Operation:
     job: int
     index: int
-    processing_times: Dict[int, int]
+    processing_times: dict[int, int]
 
 
 @dataclass(frozen=True)
@@ -14,7 +13,7 @@ class Job:
     job_id: int
     due_date: int
     weight: float
-    operations: Tuple[Operation, ...]
+    operations: tuple[Operation, ...]
 
 
 class FJSPEnv:
@@ -24,7 +23,7 @@ class FJSPEnv:
     The simulator schedules that operation at the earliest precedence- and machine-feasible time.
     """
 
-    def __init__(self, jobs: List[Job], n_machines: int):
+    def __init__(self, jobs: list[Job], n_machines: int):
         self.jobs = {j.job_id: j for j in jobs}
         self.n_machines = n_machines
         self.reset()
@@ -82,17 +81,32 @@ class FJSPEnv:
 
 def toy_instance():
     jobs = [
-        Job(0, 9, 2.0, (
-            Operation(0, 0, {0: 3, 1: 5}),
-            Operation(0, 1, {1: 2, 2: 4}),
-        )),
-        Job(1, 10, 1.0, (
-            Operation(1, 0, {0: 4, 2: 3}),
-            Operation(1, 1, {1: 4, 2: 2}),
-        )),
-        Job(2, 12, 1.5, (
-            Operation(2, 0, {1: 3, 2: 5}),
-            Operation(2, 1, {0: 2, 2: 3}),
-        )),
+        Job(
+            0,
+            9,
+            2.0,
+            (
+                Operation(0, 0, {0: 3, 1: 5}),
+                Operation(0, 1, {1: 2, 2: 4}),
+            ),
+        ),
+        Job(
+            1,
+            10,
+            1.0,
+            (
+                Operation(1, 0, {0: 4, 2: 3}),
+                Operation(1, 1, {1: 4, 2: 2}),
+            ),
+        ),
+        Job(
+            2,
+            12,
+            1.5,
+            (
+                Operation(2, 0, {1: 3, 2: 5}),
+                Operation(2, 1, {0: 2, 2: 3}),
+            ),
+        ),
     ]
     return jobs, 3
