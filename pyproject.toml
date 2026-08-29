@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "offline-fjsp"
-version = "0.2.0"
+version = "0.3.0"
 description = "Offline reinforcement learning research framework for flexible job shop scheduling"
 requires-python = ">=3.10"
 dependencies = [
@@ -14,6 +14,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8", "ruff>=0.6"]
+neural = ["torch>=2.2"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
