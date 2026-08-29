@@ -24,11 +24,7 @@ def solve_cpsat_expert(
 ) -> list[ExpertDecision]:
     """Solve a static FJSP with weighted tardiness + small makespan tie-breaker."""
     model = cp_model.CpModel()
-    horizon = sum(
-        max(op.processing_times.values())
-        for job in jobs
-        for op in job.operations
-    )
+    horizon = sum(max(op.processing_times.values()) for job in jobs for op in job.operations)
 
     starts: dict[tuple[int, int], cp_model.IntVar] = {}
     ends: dict[tuple[int, int], cp_model.IntVar] = {}
@@ -46,7 +42,10 @@ def solve_cpsat_expert(
             for machine, duration in op.processing_times.items():
                 present = model.new_bool_var(f"present_{job.job_id}_{op.index}_{machine}")
                 interval = model.new_optional_interval_var(
-                    starts[key], duration, ends[key], present,
+                    starts[key],
+                    duration,
+                    ends[key],
+                    present,
                     f"interval_{job.job_id}_{op.index}_{machine}",
                 )
                 machine_presence[(job.job_id, op.index, machine)] = present
@@ -55,10 +54,7 @@ def solve_cpsat_expert(
             model.add_exactly_one(presences)
 
         for previous, current in zip(job.operations, job.operations[1:]):
-            model.add(
-                starts[(job.job_id, current.index)]
-                >= ends[(job.job_id, previous.index)]
-            )
+            model.add(starts[(job.job_id, current.index)] >= ends[(job.job_id, previous.index)])
 
     for intervals in machine_intervals.values():
         model.add_no_overlap(intervals)
@@ -71,7 +67,7 @@ def solve_cpsat_expert(
         tardiness = model.new_int_var(0, horizon, f"tardiness_{job.job_id}")
         model.add(tardiness >= completion - job.due_date)
         model.add(tardiness >= 0)
-        weight = int(round(job.weight * 10))
+        weight = round(job.weight * 10)
         tardiness_terms.append(weight * tardiness)
 
     makespan = model.new_int_var(0, horizon, "makespan")
@@ -90,7 +86,8 @@ def solve_cpsat_expert(
     for job in jobs:
         for op in job.operations:
             machine = next(
-                m for m in op.processing_times
+                m
+                for m in op.processing_times
                 if solver.value(machine_presence[(job.job_id, op.index, m)])
             )
             decisions.append(
