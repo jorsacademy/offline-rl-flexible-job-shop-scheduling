@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 
 from offline_fjsp.final_evaluation import aggregate, paired_against_minimum_slack, run_final_campaign
 from offline_fjsp.statistics import exact_sign_test, paired_bootstrap
@@ -20,6 +21,7 @@ def test_exact_sign_test_is_symmetric():
 
 
 def test_final_campaign_smoke_keeps_frozen_blocks_and_feasibility():
+    pytest.importorskip("torch")
     rows = run_final_campaign(
         train_seeds=[10],
         model_seeds=[0],
