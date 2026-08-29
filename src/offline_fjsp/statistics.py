@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from math import comb
 
 import numpy as np
 
@@ -12,7 +13,25 @@ class PairedComparison:
     ci_high: float
     win_rate: float
     median_difference: float
+    sign_test_pvalue: float
     n: int
+
+
+def exact_sign_test(candidate: np.ndarray, reference: np.ndarray) -> float:
+    """Two-sided exact sign test for paired lower-is-better observations."""
+    candidate = np.asarray(candidate, dtype=float)
+    reference = np.asarray(reference, dtype=float)
+    if candidate.shape != reference.shape:
+        raise ValueError("paired arrays must have the same shape")
+    differences = candidate - reference
+    nonzero = differences[differences != 0]
+    n = len(nonzero)
+    if n == 0:
+        return 1.0
+    wins = int(np.sum(nonzero < 0))
+    tail = min(wins, n - wins)
+    probability = sum(comb(n, k) for k in range(tail + 1)) / (2**n)
+    return float(min(1.0, 2.0 * probability))
 
 
 def paired_bootstrap(
@@ -43,6 +62,7 @@ def paired_bootstrap(
         ci_high=float(high),
         win_rate=float(np.mean(candidate < reference)),
         median_difference=float(np.median(differences)),
+        sign_test_pvalue=exact_sign_test(candidate, reference),
         n=len(candidate),
     )
 
