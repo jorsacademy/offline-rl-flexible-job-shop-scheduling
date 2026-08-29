@@ -1,0 +1,16 @@
+{
+  "seed": 7,
+  "dataset_policies": ["spt", "edd", "minimum_slack"],
+  "offline_q": {
+    "gamma": 0.95,
+    "alpha": 0.15,
+    "support_penalty": 1.0,
+    "epochs": 200
+  },
+  "evaluation": {
+    "primary_kpi": "weighted_tardiness",
+    "secondary_kpis": ["makespan", "decision_latency"],
+    "require_feasibility": true
+  },
+  "next_stage": "add rolling-horizon CP-SAT expert and frozen train/validation/test instance blocks"
+}
