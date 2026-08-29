@@ -17,6 +17,7 @@ Policy = Callable[[FJSPEnv], tuple[int, int]]
 @dataclass(frozen=True)
 class OfflineTransition:
     action_features: np.ndarray
+    candidate_action_features: np.ndarray
     next_action_features: np.ndarray
     reward: float
     done: bool
@@ -44,6 +45,16 @@ def _expert_policy(jobs, n_machines: int, seed: int) -> Policy:
     return policy
 
 
+def _random_policy(seed: int) -> Policy:
+    rng = np.random.default_rng(seed)
+
+    def policy(env: FJSPEnv) -> tuple[int, int]:
+        actions = env.feasible_actions()
+        return actions[int(rng.integers(0, len(actions)))]
+
+    return policy
+
+
 def _rollout_transitions(
     jobs,
     n_machines: int,
@@ -52,9 +63,11 @@ def _rollout_transitions(
     policy: Policy,
 ) -> list[OfflineTransition]:
     env = FJSPEnv(jobs, n_machines)
-    staged: list[tuple[np.ndarray, np.ndarray, bool]] = []
+    staged: list[tuple[np.ndarray, np.ndarray, np.ndarray, bool]] = []
     done = False
     while not done:
+        feasible = env.feasible_actions()
+        candidate_features = np.vstack([action_features(env, candidate) for candidate in feasible])
         action = policy(env)
         phi = action_features(env, action)
         _, _, done, _ = env.step(action)
@@ -63,23 +76,22 @@ def _rollout_transitions(
             if not done
             else np.empty((0, phi.shape[0]), dtype=float)
         )
-        staged.append((phi, next_features, done))
+        staged.append((phi, candidate_features, next_features, done))
 
     metrics = env.metrics()
     terminal_utility = -float(metrics["weighted_tardiness"] + 0.02 * metrics["makespan"])
-    transitions = []
-    for phi, next_features, terminal in staged:
-        transitions.append(
-            OfflineTransition(
-                action_features=phi,
-                next_action_features=next_features,
-                reward=terminal_utility if terminal else 0.0,
-                done=terminal,
-                behavior_policy=policy_name,
-                seed=seed,
-            )
+    return [
+        OfflineTransition(
+            action_features=phi,
+            candidate_action_features=candidates,
+            next_action_features=next_features,
+            reward=terminal_utility if terminal else 0.0,
+            done=terminal,
+            behavior_policy=policy_name,
+            seed=seed,
         )
-    return transitions
+        for phi, candidates, next_features, terminal in staged
+    ]
 
 
 def build_mixed_offline_dataset(
@@ -87,22 +99,21 @@ def build_mixed_offline_dataset(
     n_jobs: int = 6,
     n_machines: int = 4,
     operations_per_job: int = 3,
-    include_expert: bool = True,
+    behavior_policies: tuple[str, ...] = ("cpsat", "minimum_slack", "edd", "spt"),
 ) -> OfflineTransitionDataset:
-    """Build expert + heuristic logged data with explicit provenance.
+    """Build logged trajectories with explicit quality/provenance controls.
 
-    The dataset contains trajectories from CP-SAT and transparent dispatching
-    policies. Terminal utility is based on weighted tardiness with a small
-    makespan tie-breaker, while intermediate rewards are zero.
+    Supported behavior policies are ``cpsat``, ``minimum_slack``, ``edd``, ``spt``
+    and ``random``. Dataset-quality ablations are created by changing their mixture,
+    not by relabeling trajectories after collection.
     """
+    allowed = {"cpsat", "minimum_slack", "edd", "spt", "random"}
+    unknown = set(behavior_policies) - allowed
+    if unknown:
+        raise ValueError(f"unknown behavior policies: {sorted(unknown)}")
+
     transitions: list[OfflineTransition] = []
     counts: dict[str, int] = {}
-    heuristics: dict[str, Policy] = {
-        "minimum_slack": minimum_slack,
-        "edd": earliest_due_date,
-        "spt": shortest_processing_time,
-    }
-
     for seed in seeds:
         jobs, machine_count = random_instance(
             seed,
@@ -110,10 +121,17 @@ def build_mixed_offline_dataset(
             n_machines=n_machines,
             operations_per_job=operations_per_job,
         )
-        policies = dict(heuristics)
-        if include_expert:
+        policies: dict[str, Policy] = {
+            "minimum_slack": minimum_slack,
+            "edd": earliest_due_date,
+            "spt": shortest_processing_time,
+            "random": _random_policy(seed + 100_000),
+        }
+        if "cpsat" in behavior_policies:
             policies["cpsat"] = _expert_policy(jobs, machine_count, seed)
-        for name, policy in policies.items():
+
+        for name in behavior_policies:
+            policy = policies[name]
             episode = _rollout_transitions(jobs, machine_count, seed, name, policy)
             transitions.extend(episode)
             counts[name] = counts.get(name, 0) + len(episode)
