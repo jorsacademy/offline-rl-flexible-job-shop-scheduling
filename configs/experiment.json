@@ -1,16 +1,26 @@
 {
-  "seed": 7,
-  "dataset_policies": ["spt", "edd", "minimum_slack"],
-  "offline_q": {
-    "gamma": 0.95,
-    "alpha": 0.15,
-    "support_penalty": 1.0,
-    "epochs": 200
+  "version": "0.2",
+  "train_seeds": [100, 101, 102],
+  "test_seeds": [200, 201, 202],
+  "instance": {
+    "n_jobs": 5,
+    "n_machines": 3,
+    "operations_per_job": 3,
+    "eligibility": 2
   },
-  "evaluation": {
-    "primary_kpi": "weighted_tardiness",
-    "secondary_kpis": ["makespan", "decision_latency"],
-    "require_feasibility": true
+  "expert": {
+    "controller": "static_cpsat",
+    "time_limit_seconds": 0.25,
+    "objective": "weighted_tardiness_then_makespan",
+    "single_worker": true
   },
-  "next_stage": "add rolling-horizon CP-SAT expert and frozen train/validation/test instance blocks"
+  "learning": {
+    "implemented": ["linear_behavior_cloning", "conservative_tabular_offline_q"],
+    "planned": ["cql", "iql"]
+  },
+  "baselines": ["spt", "edd", "minimum_slack", "cpsat_expert"],
+  "primary_kpi": "weighted_tardiness",
+  "secondary_kpis": ["makespan", "decision_latency"],
+  "require_feasibility": true,
+  "research_rule": "test seeds must not be used for model selection"
 }
