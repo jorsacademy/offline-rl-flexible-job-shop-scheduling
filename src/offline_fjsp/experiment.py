@@ -1,27 +1,22 @@
-from .model import FJSPEnv, toy_instance
-from .offline_q import ConservativeOfflineQ
-from .policies import earliest_due_date, minimum_slack, rollout, shortest_processing_time
+from .benchmark import run_benchmark, summarize
 
 
 def main():
-    jobs, n_machines = toy_instance()
-    policies = {
-        "spt": shortest_processing_time,
-        "edd": earliest_due_date,
-        "minimum_slack": minimum_slack,
-    }
-    logged = []
-    print("baseline,makespan,weighted_tardiness")
-    for name, policy in policies.items():
-        env = FJSPEnv(jobs, n_machines)
-        transitions, metrics = rollout(env, policy)
-        logged.extend(transitions)
-        print(f"{name},{metrics['makespan']},{metrics['weighted_tardiness']:.3f}")
-
-    learner = ConservativeOfflineQ().fit(logged, epochs=200)
-    env = FJSPEnv(jobs, n_machines)
-    _, metrics = rollout(env, learner.act)
-    print(f"offline_q,{metrics['makespan']},{metrics['weighted_tardiness']:.3f}")
+    rows = run_benchmark(
+        train_seeds=[100, 101, 102],
+        test_seeds=[200, 201, 202],
+        n_jobs=5,
+        n_machines=3,
+        operations_per_job=3,
+        time_limit_seconds=0.25,
+    )
+    summary = summarize(rows)
+    print("controller,mean_makespan,mean_weighted_tardiness")
+    for controller, metrics in summary.items():
+        print(
+            f"{controller},{metrics['mean_makespan']:.3f},"
+            f"{metrics['mean_weighted_tardiness']:.3f}"
+        )
 
 
 if __name__ == "__main__":
