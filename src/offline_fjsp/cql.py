@@ -10,8 +10,9 @@ from .offline_dataset import OfflineTransitionDataset
 class LinearCQL:
     """Small fitted conservative Q-learning baseline over action features.
 
-    This is intentionally linear and auditable. It minimizes Bellman error while
-    shrinking Q-values on randomly sampled out-of-dataset candidate features.
+    Bellman targets use next-state feasible actions. The conservative term uses
+    the full feasible action set at the *current* logged decision state, which
+    prevents accidental support leakage from the next state.
     """
 
     def __init__(
@@ -57,13 +58,11 @@ class LinearCQL:
                 error = float(row @ weights - target)
                 grad += 2.0 * error * row
 
-                if len(transition.next_action_features):
-                    candidates = self._normalize(transition.next_action_features)
-                    q_values = candidates @ weights
-                    probabilities = np.exp(q_values - np.max(q_values))
-                    probabilities /= probabilities.sum()
-                    conservative_gradient = probabilities @ candidates - row
-                    grad += self.conservative_weight * conservative_gradient
+                candidates = self._normalize(transition.candidate_action_features)
+                q_values = candidates @ weights
+                probabilities = np.exp(q_values - np.max(q_values))
+                probabilities /= probabilities.sum()
+                grad += self.conservative_weight * (probabilities @ candidates - row)
 
             grad = grad / max(len(dataset.transitions), 1) + self.l2 * weights
             weights -= self.learning_rate * grad
