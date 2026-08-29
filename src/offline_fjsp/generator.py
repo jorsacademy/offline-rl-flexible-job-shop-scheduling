@@ -31,7 +31,7 @@ def random_instance(
             processing = {int(m): int(rng.integers(2, 12)) for m in machines}
             min_work += min(processing.values())
             operations.append(Operation(job_id, op_idx, processing))
-        due_date = int(round(min_work * float(rng.uniform(1.6, 2.6))))
+        due_date = round(min_work * float(rng.uniform(1.6, 2.6)))
         weight = float(rng.choice([1.0, 1.5, 2.0, 3.0]))
         jobs.append(Job(job_id, due_date, weight, tuple(operations)))
     return jobs, n_machines
