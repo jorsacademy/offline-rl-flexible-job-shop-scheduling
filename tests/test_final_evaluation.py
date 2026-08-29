@@ -1,7 +1,11 @@
 import numpy as np
 import pytest
 
-from offline_fjsp.final_evaluation import aggregate, paired_against_minimum_slack, run_final_campaign
+from offline_fjsp.final_evaluation import (
+    aggregate,
+    paired_against_minimum_slack,
+    run_final_campaign,
+)
 from offline_fjsp.statistics import exact_sign_test, paired_bootstrap
 
 
