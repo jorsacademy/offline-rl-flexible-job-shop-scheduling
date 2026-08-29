@@ -15,7 +15,7 @@ class LinearBehaviorCloning:
         self.scale_: np.ndarray | None = None
         self.coef_: np.ndarray | None = None
 
-    def fit(self, features: np.ndarray, labels: np.ndarray) -> "LinearBehaviorCloning":
+    def fit(self, features: np.ndarray, labels: np.ndarray) -> LinearBehaviorCloning:
         self.mean_ = features.mean(axis=0)
         self.scale_ = features.std(axis=0)
         self.scale_[self.scale_ < 1e-9] = 1.0
@@ -34,4 +34,11 @@ class LinearBehaviorCloning:
         actions = env.feasible_actions()
         if not actions:
             raise RuntimeError("no feasible actions")
-        return max(actions, key=lambda action: (self.score(action_features(env, action)), -action[0], -action[1]))
+        return max(
+            actions,
+            key=lambda action: (
+                self.score(action_features(env, action)),
+                -action[0],
+                -action[1],
+            ),
+        )
