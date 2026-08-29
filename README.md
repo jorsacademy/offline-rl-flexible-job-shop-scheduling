@@ -4,37 +4,36 @@ Research-oriented Industrial Engineering / Operations Research project studying 
 
 ## Research question
 
-Can a learned dispatch policy imitate strong CP-SAT decisions well enough to preserve scheduling quality on previously unseen Flexible Job Shop Scheduling Problem (FJSP) instances, and how does that trade off against solver latency and transparent dispatching rules?
+Can offline policies trained from a mixture of CP-SAT expert and heuristic trajectories generalize to unseen FJSP instances, and when do value-based methods add anything beyond behavior cloning?
 
 ## Current status
 
-**Phase 2 implemented: OR expert demonstrations + held-out behavior-cloning benchmark.**
+**Phase 3 implemented: mixed-quality offline dataset + BC/CQL/IQL validation and OOD benchmark.**
 
-The repository now contains a reproducible synthetic FJSP generator, deterministic event-driven simulator, three dispatching baselines, a real OR-Tools CP-SAT expert, candidate-level demonstration logging, a generalizable linear behavior-cloning ranker, a conservative tabular offline-Q reference, held-out train/test instance blocks, tests and GitHub Actions CI.
+The repository contains a seeded synthetic FJSP generator, deterministic event-driven simulator, dispatching baselines, a real OR-Tools CP-SAT expert, candidate-level expert demonstrations, mixed-quality logged trajectories with policy provenance, linear behavior cloning, auditable fitted CQL and expectile-IQL baselines, held-out validation/OOD blocks, tests and GitHub Actions CI.
 
-The project does not claim that offline RL is already superior. CQL/IQL and the larger frozen validation/final campaigns remain future research stages.
+The CQL and IQL implementations are deliberately linear rather than presented as production-scale neural agents. Their role is to make the offline-RL objectives inspectable and to establish a reproducible research baseline before any neural extension.
 
 ## Implemented decision stack
 
 1. **Transparent dispatching** — shortest processing time, earliest due date and minimum slack.
-2. **OR expert** — CP-SAT with alternative-machine assignment, precedence, no-overlap constraints and a weighted-tardiness objective with makespan tie-breaking.
-3. **Offline demonstrations** — every expert decision state logs all feasible candidate actions; the expert-selected candidate is explicitly labeled.
-4. **Behavior cloning** — ridge-regularized linear candidate ranker trained only on demonstration features.
-5. **Offline-Q reference** — conservative tabular learner retained for small-state diagnostics, not treated as the main generalization result.
+2. **OR expert** — CP-SAT with alternative-machine assignment, precedence, no-overlap constraints and weighted-tardiness minimization with makespan tie-breaking.
+3. **Expert demonstrations** — every CP-SAT decision state logs all feasible candidate actions.
+4. **Mixed-quality offline data** — CP-SAT, minimum slack, EDD and SPT trajectories are retained with explicit behavior-policy provenance.
+5. **Behavior cloning** — ridge-regularized candidate ranker trained on expert candidate labels.
+6. **Linear CQL** — fitted conservative Q-learning over action features with a conservative penalty on feasible alternatives.
+7. **Linear IQL** — fitted Q/value learning with asymmetric expectile regression.
+8. **Tabular offline-Q reference** — retained only for small-state diagnostics.
 
-## Why candidate-level logging matters
+## Offline reward contract
 
-A common offline-RL mistake is to treat actions absent from a trajectory as if their value were known. This project instead records the entire feasible candidate set at each expert decision epoch. The behavior-cloning baseline therefore learns a ranking problem from observed expert choices while preserving the distinction between demonstrated and merely feasible actions.
+The simulator's native step reward is intentionally not repurposed for the modern offline-RL benchmark. Instead, logged trajectories use sparse terminal utility
 
-## FJSP model
+`-(weighted_tardiness + 0.02 * makespan)`
 
-Each job contains multiple precedence-constrained operations. Every operation has a subset of eligible machines and machine-dependent processing times. A scheduling action selects `(job_id, machine_id)` for the next operation of a job. The simulator executes the assignment at the earliest precedence- and machine-feasible start time.
+with zero intermediate reward. This keeps the learning objective aligned with the scheduling KPI and avoids silently optimizing processing time instead of tardiness.
 
-Primary KPI: **weighted tardiness**.
-
-Secondary KPIs currently include makespan; decision and solver latency are part of the next benchmark expansion.
-
-## Reproducible experiment
+## Reproducible experiments
 
 ```bash
 python -m venv .venv
@@ -42,14 +41,10 @@ source .venv/bin/activate
 pip install -e '.[dev]'
 pytest -q
 python -m offline_fjsp.experiment
+python -m offline_fjsp.phase3_experiment
 ```
 
-The smoke benchmark uses separate instance blocks:
-
-- training demonstrations: seeds `100-102`;
-- held-out test: seeds `200-202`.
-
-These small blocks keep CI fast. Larger research campaigns should define independent development, validation and final-test blocks before tuning begins.
+The Phase-3 runner uses independent seed blocks for training, validation and OOD evaluation. Model fitting only touches the training block. CP-SAT remains a benchmark controller on held-out instances.
 
 ## Repository map
 
@@ -60,15 +55,18 @@ src/offline_fjsp/
   policies.py           # SPT, EDD, minimum-slack baselines
   cpsat_expert.py       # OR-Tools CP-SAT expert scheduler
   features.py           # candidate action representation
-  dataset.py            # CP-SAT demonstration dataset builder
-  behavior_cloning.py   # generalizable candidate-ranking baseline
-  offline_q.py          # conservative tabular offline-Q reference
-  benchmark.py          # held-out controller comparison
-  experiment.py         # reproducible CLI smoke benchmark
-
+  dataset.py            # candidate-labeled CP-SAT demonstrations
+  offline_dataset.py    # mixed expert/heuristic transition dataset
+  behavior_cloning.py   # expert imitation baseline
+  cql.py                # auditable fitted linear CQL
+  iql.py                # auditable fitted linear IQL
+  offline_q.py          # conservative tabular diagnostic baseline
+  phase3_experiment.py  # BC/CQL/IQL/heuristic/CP-SAT benchmark
+  experiment.py         # Phase-2 smoke benchmark
 tests/
   test_core.py
   test_research_pipeline.py
+  test_phase3.py
 configs/
   experiment.json
 .github/workflows/
@@ -78,30 +76,31 @@ configs/
 ## Scientific evaluation contract
 
 - strong non-learning baselines precede learning claims;
-- instance seeds are partitioned before evaluation;
-- expert decisions and candidate support are logged explicitly;
+- dataset provenance is explicit;
+- train, validation and OOD instance blocks are separated before model fitting;
 - feasibility is mandatory;
-- model selection must not use test seeds;
-- optimization quality and computation cost must eventually be reported together;
-- negative learning results are retained rather than tuned away.
+- model selection must not use final/OOD seeds;
+- negative results are retained;
+- CQL/IQL are not considered superior merely because they are more complex;
+- decision quality and solve/inference latency must eventually be reported together.
 
 ## Next research stages
 
-### Phase 3 — dataset quality study
-Generate CP-SAT expert-only, mixed heuristic/expert, deliberately noisy and low-quality datasets. Quantify how policy quality degrades with demonstration quality and coverage.
+### Phase 4 — dataset-quality ablation
+Construct expert-only, expert-heavy, balanced, heuristic-heavy and deliberately corrupted datasets. Measure policy degradation against data quality and action-support coverage.
 
-### Phase 4 — modern offline RL
-Add neural CQL and IQL with masked discrete candidate actions. Compare them against behavior cloning rather than assuming value learning is necessary.
+### Phase 5 — neural masked offline RL
+Add PyTorch masked discrete CQL/IQL only after the linear baselines are frozen. Compare neural models against BC and linear value learning, not only against weak heuristics.
 
-### Phase 5 — frozen validation and final test
-Introduce development, validation and one-time final blocks; multi-seed training; bootstrap confidence intervals; paired inference; latency and reliability accounting.
+### Phase 6 — frozen final evaluation
+Add a one-time final seed block, multi-seed training, bootstrap confidence intervals, paired tests, effect sizes, latency and reliability accounting.
 
-### Phase 6 — OOD stress campaign
-Increase job count and utilization, tighten due dates, alter eligibility density and shift processing-time distributions. Measure generalization separately from nominal performance.
+### Phase 7 — OOD stress campaign
+Increase job count and utilization, tighten due dates, alter machine eligibility density and shift processing-time distributions. Generalization must be reported separately from nominal performance.
 
 ## Success criterion
 
-A learned policy earns promotion only if it is feasible on every final instance and delivers a defensible decision-quality/latency trade-off against strong dispatching rules and CP-SAT. If CP-SAT or a heuristic remains superior, that result is the operational recommendation.
+A learned policy earns promotion only if it is feasible on every final instance and produces a defensible quality/latency trade-off against CP-SAT and strong dispatching rules. If behavior cloning or a heuristic remains better than CQL/IQL, that result is retained as the operational recommendation.
 
 ## License
 
